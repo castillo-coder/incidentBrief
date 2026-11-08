@@ -1,0 +1,43 @@
+{
+  "name": "incidentbrief",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "scripts": {
+    "dev": "npm run build -w @incidentbrief/contracts && concurrently -k 'npm run dev -w @incidentbrief/api' 'npm run dev -w @incidentbrief/web'",
+    "build": "npm run build -w @incidentbrief/contracts && npm run build -w @incidentbrief/web && npm run build -w @incidentbrief/api",
+    "typecheck": "npm run build -w @incidentbrief/contracts && npm run typecheck --workspaces --if-present",
+    "lint": "eslint . && node scripts/check-boundaries.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "db:migrate": "npm run db:migrate -w @incidentbrief/api",
+    "user:create": "npm run user:create -w @incidentbrief/api",
+    "start": "npm run start -w @incidentbrief/api"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.10.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2",
+    "vite": "^7.1.12",
+    "vitest": "^3.2.4"
+  }
+}
