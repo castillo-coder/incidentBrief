@@ -83,7 +83,7 @@ describe('transactional encryption migration', () => {
     expect(
       (await pool.query('SELECT body_ciphertext FROM notes WHERE id = $1', [noteId])).rows[0],
     ).toEqual(note);
-    expect((await pool.query('SELECT name FROM schema_migrations')).rowCount).toBe(2);
+    expect((await pool.query('SELECT name FROM schema_migrations')).rowCount).toBe(3);
     const checks = await pool.query<{ convalidated: boolean }>(
       "SELECT convalidated FROM pg_constraint WHERE connamespace = 'incidentbrief_migration_test'::regnamespace AND conname IN ('incidents_description_envelope', 'notes_body_envelope')",
     );
@@ -108,7 +108,7 @@ describe('transactional encryption migration', () => {
     );
     expect((await pool.query('SELECT name FROM schema_migrations')).rowCount).toBe(1);
     await migrate(pool, cipher);
-    expect((await pool.query('SELECT name FROM schema_migrations')).rowCount).toBe(2);
+    expect((await pool.query('SELECT name FROM schema_migrations')).rowCount).toBe(3);
   });
   it('converts both tables across the 500-row batch boundary without losing records', async () => {
     const ids: string[] = Array.from({ length: 501 }, () => randomUUID());

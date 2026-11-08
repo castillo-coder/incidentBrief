@@ -54,3 +54,5 @@ Browser tests start the built frontend and a test API on port 4173 with generate
 Stop the API with Ctrl+C, then run `docker compose down`. The database volume is retained.
 
 See [API contracts](docs/api.md) and [architecture](docs/architecture.md) for authentication, pagination, streaming and dependency boundaries.
+
+To reproduce the synthetic query plans and index comparisons, see [query performance](docs/query-performance.md). Profiling runs in a disposable schema of the local test database and saves reports outside the repository.

@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, desc, lt, or, inArray } from 'drizzle-orm';
+import { and, eq, desc, exists } from 'drizzle-orm';
 import type { NoteRepository } from '../domain/ports.js';
 import type { Database } from '../db/client.js';
 import { incidents, notes } from '../db/schema.js';
-import { decodeCursor } from './cursor.js';
+import { decodeCursor, beforeCursor } from './cursor.js';
 import { page } from './page.js';
 import type { StorageMapper } from './storage-mapper.js';
 
@@ -12,6 +12,8 @@ export function noteRepository(db: Database, mapper: StorageMapper): NoteReposit
     and(eq(incidents.ownerId, ownerId), eq(incidents.id, incidentId));
   const parentIds = (ownerId: string, incidentId: string) =>
     db.select({ id: incidents.id }).from(incidents).where(parent(ownerId, incidentId));
+  const ownedParent = (ownerId: string, incidentId: string) =>
+    and(eq(notes.incidentId, incidentId), exists(parentIds(ownerId, incidentId)));
   return {
     async list(ownerId, incidentId, query) {
       const cursor = decodeCursor(query.cursor);
@@ -20,15 +22,7 @@ export function noteRepository(db: Database, mapper: StorageMapper): NoteReposit
         .select()
         .from(notes)
         .where(
-          and(
-            inArray(notes.incidentId, parentIds(ownerId, incidentId)),
-            cursor
-              ? or(
-                  lt(notes.createdAt, new Date(cursor.created_at)),
-                  and(eq(notes.createdAt, new Date(cursor.created_at)), lt(notes.id, cursor.id)),
-                )
-              : undefined,
-          ),
+          and(ownedParent(ownerId, incidentId), beforeCursor(notes.createdAt, notes.id, cursor)),
         )
         .orderBy(desc(notes.createdAt), desc(notes.id))
         .limit(limit + 1);
@@ -60,9 +54,7 @@ export function noteRepository(db: Database, mapper: StorageMapper): NoteReposit
         (
           await db
             .delete(notes)
-            .where(
-              and(eq(notes.id, noteId), inArray(notes.incidentId, parentIds(ownerId, incidentId))),
-            )
+            .where(and(eq(notes.id, noteId), ownedParent(ownerId, incidentId)))
             .returning({ id: notes.id })
         ).length > 0
       );
@@ -71,7 +63,7 @@ export function noteRepository(db: Database, mapper: StorageMapper): NoteReposit
       const rows = await db
         .select()
         .from(notes)
-        .where(inArray(notes.incidentId, parentIds(ownerId, incidentId)))
+        .where(ownedParent(ownerId, incidentId))
         .orderBy(desc(notes.createdAt), desc(notes.id))
         .limit(30);
       return rows.map((row) => mapper.note(row, ownerId)).reverse();

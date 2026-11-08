@@ -23,6 +23,7 @@
     "test:e2e": "playwright test",
     "db:migrate": "npm run db:migrate -w @incidentbrief/api",
     "user:create": "npm run user:create -w @incidentbrief/api",
+    "db:profile": "npm run build -w @incidentbrief/contracts && npm run db:profile -w @incidentbrief/api --",
     "start": "npm run start -w @incidentbrief/api"
   },
   "devDependencies": {

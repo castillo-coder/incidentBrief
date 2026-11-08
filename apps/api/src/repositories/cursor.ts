@@ -1,3 +1,5 @@
+import { sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { invalid } from '../domain/errors.js';
 
 export interface Cursor {
@@ -29,3 +31,14 @@ export function decodeCursor(value?: string): Cursor | undefined {
 }
 export const encodeCursor = (value: Cursor) =>
   Buffer.from(JSON.stringify(value)).toString('base64url');
+
+/** Match the B-tree's lexicographic range without a BitmapOr and extra sort. */
+export function beforeCursor(
+  createdAt: AnyPgColumn<{ data: Date }>,
+  recordId: AnyPgColumn<{ data: string }>,
+  cursor: Cursor | undefined,
+) {
+  return cursor
+    ? sql`(${createdAt}, ${recordId}) < (${cursor.created_at}::timestamptz, ${cursor.id}::uuid)`
+    : undefined;
+}
