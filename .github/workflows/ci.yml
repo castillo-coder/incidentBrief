@@ -1,0 +1,105 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18-bookworm
+        env:
+          POSTGRES_USER: incidentbrief
+          POSTGRES_DB: incidentbrief_test
+          # Ephemeral test DB, bound only to the runner's loopback interface.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - '127.0.0.1:55439:5432'
+        options: >-
+          --health-cmd "pg_isready -U incidentbrief -d incidentbrief_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://incidentbrief@127.0.0.1:55439/incidentbrief_test
+      TEST_DATABASE_URL: postgres://incidentbrief@127.0.0.1:55439/incidentbrief_test
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Generate a masked ephemeral encryption key
+        run: |
+          node --input-type=module <<'JS'
+          import { randomBytes } from 'node:crypto';
+          import { appendFileSync } from 'node:fs';
+          const key = randomBytes(32).toString('base64');
+          console.log('::add-mask::' + key);
+          appendFileSync(process.env.GITHUB_ENV, 'ENCRYPTION_KEY=' + key + '\n');
+          JS
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Scan history for secrets
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro"
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory
+          -e GIT_CONFIG_VALUE_0=/repo
+          ghcr.io/gitleaks/gitleaks:v8.30.1
+          git --redact --no-banner --log-opts=--all /repo
+      - run: npm run test:coverage
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: checks-${{ github.sha }}
+          path: |
+            coverage/
+            playwright-report/
+            test-results/
+          retention-days: 90
+
+  container:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - run: npm run setup
+      - run: docker compose up --build --wait
+      - run: node scripts/container-smoke.ts
+      - name: Stop containers and discard CI data
+        if: always()
+        run: docker compose down --volumes
+
+  deploy:
+    needs: [checks, container]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      source_sha: ${{ github.sha }}
+    secrets: inherit

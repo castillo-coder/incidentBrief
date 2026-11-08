@@ -1,5 +1,36 @@
 name: incidentbrief
 services:
+  app:
+    image: incidentbrief:local
+    build:
+      context: .
+      args:
+        APP_COMMIT: ${APP_COMMIT:-development}
+    environment:
+      # The production image runs locally over HTTP; production uses HTTPS.
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 3100
+      APP_ORIGIN: http://localhost:${APP_PORT:-3100}
+      DATABASE_URL: postgres://incidentbrief:${POSTGRES_PASSWORD:?Run npm run setup}@db:5432/incidentbrief
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Run npm run setup}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+    ports:
+      - '127.0.0.1:${APP_PORT:-3100}:3100'
+    depends_on:
+      db:
+        condition: service_healthy
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 40s
   db:
     image: postgres:18-bookworm
     environment:
