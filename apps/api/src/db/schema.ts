@@ -13,7 +13,10 @@ export const sessions = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    expiresAt: timestamp('expires_at', { withTimezone: true, precision: 3 }).notNull(),
+    expiresAt: timestamp('expires_at', {
+      withTimezone: true,
+      precision: 3,
+    }).notNull(),
   },
   (table) => [index('sessions_expiry_idx').on(table.expiresAt)],
 );
@@ -23,7 +26,7 @@ export const incidents = pgTable('incidents', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   title: text().notNull(),
-  description: text().notNull(),
+  descriptionCiphertext: text('description_ciphertext').notNull(),
   severity: text({ enum: ['low', 'medium', 'high'] }).notNull(),
   status: text({ enum: ['open', 'resolved'] })
     .notNull()
@@ -36,7 +39,7 @@ export const notes = pgTable('notes', {
   incidentId: uuid('incident_id')
     .notNull()
     .references(() => incidents.id, { onDelete: 'cascade' }),
-  body: text().notNull(),
+  bodyCiphertext: text('body_ciphertext').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true, precision: 3 }).notNull().defaultNow(),
 });
 export type UserRow = typeof users.$inferSelect;

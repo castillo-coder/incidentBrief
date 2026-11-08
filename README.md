@@ -24,6 +24,8 @@ Setup generates an ignored `.env` without replacing existing values. With native
 
 Compose currently runs the database only, bound to `127.0.0.1:55439`. The application Docker image is a later milestone. To serve a production frontend build locally, run `npm run build` then `npm start`; use `APP_ORIGIN=http://localhost:3100 npm start` when accessing it directly on port 3100.
 
+Descriptions and note bodies are encrypted before storage. Preserve the generated `ENCRYPTION_KEY`; replacing it makes existing records unreadable. Run migrations with the application stopped. See [storage and migration details](docs/architecture.md).
+
 ## Check
 
 Create an isolated test database once:

@@ -7,6 +7,10 @@ import { migrate } from '../apps/api/src/db/migrate.js';
 import { users } from '../apps/api/src/db/schema.js';
 import { authRepository } from '../apps/api/src/repositories/auth-repository.js';
 import { incidentRepository } from '../apps/api/src/repositories/incident-repository.js';
+import { noteRepository } from '../apps/api/src/repositories/note-repository.js';
+import { StorageMapper } from '../apps/api/src/repositories/storage-mapper.js';
+import { AesGcmCipher } from '../apps/api/src/security/aes-gcm-cipher.js';
+import { NoteService } from '../apps/api/src/services/note-service.js';
 import { AuthService, hashPassword } from '../apps/api/src/services/auth-service.js';
 import { IncidentService } from '../apps/api/src/services/incident-service.js';
 import { SummaryService } from '../apps/api/src/services/summary-service.js';
@@ -37,6 +41,17 @@ export class FakeProvider implements SummaryProvider {
   }
 }
 
+export function testDatabaseUrl() {
+  const base = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (!base)
+    throw new Error('Set TEST_DATABASE_URL to an isolated PostgreSQL database ending in _test.');
+  const url = new URL(base);
+  if (!process.env.TEST_DATABASE_URL) url.pathname = '/incidentbrief_test';
+  if (!url.pathname.endsWith('_test'))
+    throw new Error('Refusing to reset a database not ending in _test.');
+  return url.toString();
+}
+
 export async function fixture(
   options: {
     provider?: SummaryProvider;
@@ -46,20 +61,15 @@ export async function fixture(
     staticRoot?: string;
   } = {},
 ) {
-  const base = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
-  if (!base)
-    throw new Error('Set TEST_DATABASE_URL to an isolated PostgreSQL database ending in _test.');
-  const url = new URL(base);
-  if (!process.env.TEST_DATABASE_URL) url.pathname = '/incidentbrief_test';
-  if (!url.pathname.endsWith('_test'))
-    throw new Error('Refusing to reset a database not ending in _test.');
   const config = loadConfig({
     ...process.env,
-    DATABASE_URL: url.toString(),
+    DATABASE_URL: testDatabaseUrl(),
     ENCRYPTION_KEY: randomBytes(32).toString('base64'),
   });
   const { db, pool } = createDatabase(config.databaseUrl);
-  await migrate(pool);
+  const cipher = new AesGcmCipher(config.encryptionKey);
+  const mapper = new StorageMapper(cipher);
+  await migrate(pool, cipher);
   await pool.query('TRUNCATE users CASCADE');
   const owner = {
     id: randomUUID(),
@@ -72,14 +82,17 @@ export async function fixture(
     passwordHash: await passwordHash,
   };
   await db.insert(users).values([owner, other]);
-  const repository = incidentRepository(db);
+  const repository = incidentRepository(db, mapper);
+  const noteStore = noteRepository(db, mapper);
   const auth = new AuthService(authRepository(db));
   const incidentService = new IncidentService(repository);
+  const noteService = new NoteService(repository, noteStore);
   const provider = options.provider ?? new FakeProvider();
-  const summaryService = new SummaryService(repository, provider);
+  const summaryService = new SummaryService(repository, noteStore, provider);
   const app = await createApp({
     auth,
     incidents: incidentService,
+    notes: noteService,
     summaries: summaryService,
     origin: options.origin ?? origin,
     production: options.production ?? false,
@@ -107,6 +120,10 @@ export async function fixture(
     db,
     pool,
     repository,
+    noteStore,
+    noteService,
+    cipher,
+    encryptionKey: config.encryptionKey,
     owner,
     other,
     auth,

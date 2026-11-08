@@ -39,6 +39,7 @@ import {
 import { AppError, unauthenticated } from '../domain/errors.js';
 import { csrfToken, type AuthService } from '../services/auth-service.js';
 import type { IncidentService } from '../services/incident-service.js';
+import type { NoteService } from '../services/note-service.js';
 import type { SummaryService } from '../services/summary-service.js';
 
 declare module 'fastify' {
@@ -50,6 +51,7 @@ declare module 'fastify' {
 export interface AppOptions {
   auth: AuthService;
   incidents: IncidentService;
+  notes: NoteService;
   summaries: SummaryService;
   origin: string;
   production: boolean;
@@ -253,7 +255,7 @@ export async function createApp(options: AppOptions) {
         response: { 200: NotePageSchema, ...failures },
       },
     },
-    (request) => options.incidents.listNotes(actorId(request), request.params.id, request.query),
+    (request) => options.notes.list(actorId(request), request.params.id, request.query),
   );
   app.post<{ Params: IncidentParams; Body: NoteInput }>(
     '/api/incidents/:id/notes',
@@ -268,9 +270,7 @@ export async function createApp(options: AppOptions) {
     async (request, reply) =>
       reply
         .code(201)
-        .send(
-          await options.incidents.addNote(actorId(request), request.params.id, request.body.body),
-        ),
+        .send(await options.notes.add(actorId(request), request.params.id, request.body.body)),
   );
   app.delete<{ Params: NoteParams }>(
     '/api/incidents/:id/notes/:noteId',
@@ -279,11 +279,7 @@ export async function createApp(options: AppOptions) {
       schema: { params: NoteParamsSchema },
     },
     async (request, reply) => {
-      await options.incidents.deleteNote(
-        actorId(request),
-        request.params.id,
-        request.params.noteId,
-      );
+      await options.notes.delete(actorId(request), request.params.id, request.params.noteId);
       return reply.code(204).send();
     },
   );

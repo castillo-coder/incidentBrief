@@ -224,11 +224,7 @@ describe('incidents and notes', () => {
   });
   it('isolates all reads, writes, notes and summary endpoints by incident owner', async () => {
     const item = await f.incidentService.create(f.other.id, input);
-    const note = await f.incidentService.addNote(
-      f.other.id,
-      item.id,
-      'Private investigation note.',
-    );
+    const note = await f.noteService.add(f.other.id, item.id, 'Private investigation note.');
     const headers = await f.login();
     const requests = [
       { method: 'GET' as const, url: `/api/incidents/${item.id}` },
@@ -296,7 +292,7 @@ describe('incidents and notes', () => {
     });
     expect(response.statusCode).toBe(201);
     const first = response.json<Note>();
-    await f.incidentService.addNote(f.owner.id, a.id, 'Second note');
+    await f.noteService.add(f.owner.id, a.id, 'Second note');
     const page = (
       await f.app.inject({
         url: `/api/incidents/${a.id}/notes?limit=1`,
@@ -384,7 +380,7 @@ describe('incidents and notes', () => {
 describe('summary streaming', () => {
   it('streams typed deltas and a terminal done event using real HTTP/service/DB integration', async () => {
     const item = await f.incidentService.create(f.owner.id, input);
-    await f.incidentService.addNote(f.owner.id, item.id, 'Investigating dependency latency.');
+    await f.noteService.add(f.owner.id, item.id, 'Investigating dependency latency.');
     const response = await f.app.inject({
       method: 'POST',
       url: `/api/incidents/${item.id}/summary`,
@@ -435,7 +431,7 @@ describe('summary streaming', () => {
       ...input,
       description: 'a'.repeat(12000),
     });
-    await f.incidentService.addNote(f.owner.id, item.id, 'b'.repeat(8000));
+    await f.noteService.add(f.owner.id, item.id, 'b'.repeat(8000));
     const response = await f.app.inject({
       method: 'POST',
       url: `/api/incidents/${item.id}/summary`,

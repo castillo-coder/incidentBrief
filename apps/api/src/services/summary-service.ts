@@ -1,11 +1,12 @@
 import type { SummaryEvent } from '@incidentbrief/contracts';
-import type { IncidentRepository, SummaryProvider } from '../domain/ports.js';
+import type { IncidentRepository, NoteRepository, SummaryProvider } from '../domain/ports.js';
 import { AppError, notFound } from '../domain/errors.js';
 
 export class SummaryService {
   private readonly activeUsers = new Set<string>();
   constructor(
     private readonly repository: IncidentRepository,
+    private readonly notes: NoteRepository,
     private readonly provider: SummaryProvider,
     private readonly timeoutMs = 30000,
   ) {}
@@ -27,7 +28,7 @@ export class SummaryService {
       }
     };
     try {
-      const notes = await this.repository.summaryNotes(ownerId, incidentId);
+      const notes = await this.notes.latest(ownerId, incidentId);
       const context = JSON.stringify({
         title: incident.title,
         description: incident.description,

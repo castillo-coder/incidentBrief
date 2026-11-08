@@ -1,5 +1,6 @@
 import { config as dotenv } from 'dotenv';
 import { fileURLToPath } from 'node:url';
+import { decodeEncryptionKey } from './security/aes-gcm-cipher.js';
 
 dotenv({ path: fileURLToPath(new URL('../../../.env', import.meta.url)), quiet: true });
 
@@ -16,15 +17,9 @@ export interface Config {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const databaseUrl = env.DATABASE_URL;
-  const encryptionKey = env.ENCRYPTION_KEY;
+  const encryptionKey = env.ENCRYPTION_KEY ?? '';
   if (!databaseUrl) throw new Error('DATABASE_URL is required.');
-  if (
-    !encryptionKey ||
-    !/^[A-Za-z0-9+/]{43}=$/.test(encryptionKey) ||
-    Buffer.from(encryptionKey, 'base64').length !== 32
-  ) {
-    throw new Error('ENCRYPTION_KEY must be a base64-encoded 32-byte key.');
-  }
+  decodeEncryptionKey(encryptionKey);
   const port = Number(env.PORT ?? 3100);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT is invalid.');
   const production = env.NODE_ENV === 'production';
