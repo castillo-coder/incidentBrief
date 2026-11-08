@@ -1,0 +1,19 @@
+name: incidentbrief
+services:
+  db:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_USER: incidentbrief
+      POSTGRES_DB: incidentbrief
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - '127.0.0.1:${DB_PORT:-55439}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U incidentbrief -d incidentbrief']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  postgres_data:

@@ -11,9 +11,10 @@
     "node": ">=24 <27"
   },
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "dev": "npm run build -w @incidentbrief/contracts && concurrently -k 'npm run dev -w @incidentbrief/api' 'npm run dev -w @incidentbrief/web'",
     "build": "npm run build -w @incidentbrief/contracts && npm run build -w @incidentbrief/web && npm run build -w @incidentbrief/api",
-    "typecheck": "npm run build -w @incidentbrief/contracts && npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run build -w @incidentbrief/contracts && npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.tests.json",
     "lint": "eslint . && node scripts/check-boundaries.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

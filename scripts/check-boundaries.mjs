@@ -4,9 +4,11 @@ import { join } from 'node:path';
 async function walk(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
   const files = await Promise.all(
-    entries.map((entry) =>
-      entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
-    ),
+    entries
+      .filter((entry) => !['node_modules', 'dist'].includes(entry.name))
+      .map((entry) =>
+        entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
+      ),
   );
   return files.flat();
 }
