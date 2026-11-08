@@ -13,7 +13,7 @@ import { SummaryService } from '../apps/api/src/services/summary-service.js';
 import type { SummaryProvider } from '../apps/api/src/domain/ports.js';
 import { createApp } from '../apps/api/src/http/app.js';
 
-export const password = randomBytes(20).toString('hex');
+export const password = process.env.E2E_PASSWORD ?? randomBytes(20).toString('hex');
 const passwordHash = hashPassword(password);
 export const origin = 'http://localhost:5173';
 export const input = {
@@ -28,7 +28,7 @@ export class FakeProvider implements SummaryProvider {
   available() {
     return this.mode !== 'unavailable';
   }
-  async *stream(context: string, signal: AbortSignal) {
+  async *stream(context: string, signal: AbortSignal): AsyncGenerator<string> {
     this.contexts.push(context);
     if (signal.aborted) throw signal.reason;
     yield 'Known facts\n';
@@ -42,6 +42,8 @@ export async function fixture(
     provider?: SummaryProvider;
     production?: boolean;
     logger?: FastifyServerOptions['logger'];
+    origin?: string;
+    staticRoot?: string;
   } = {},
 ) {
   const base = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -79,15 +81,16 @@ export async function fixture(
     auth,
     incidents: incidentService,
     summaries: summaryService,
-    origin,
+    origin: options.origin ?? origin,
     production: options.production ?? false,
     logger: options.logger ?? false,
+    ...(options.staticRoot ? { staticRoot: options.staticRoot } : {}),
   });
   async function login(who = owner) {
     const response = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
-      headers: { origin },
+      headers: { origin: options.origin ?? origin },
       payload: { email: who.email, password },
     });
     if (response.statusCode !== 200) throw new Error('Test login failed.');
@@ -95,7 +98,7 @@ export async function fixture(
     if (!cookie) throw new Error('Session cookie missing.');
     return {
       cookie: `session=${cookie.value}`,
-      origin,
+      origin: options.origin ?? origin,
       'x-csrf-token': response.json<Auth>().csrf_token,
     };
   }
