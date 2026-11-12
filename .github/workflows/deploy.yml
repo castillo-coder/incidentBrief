@@ -1,0 +1,44 @@
+name: Deploy verified source
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: incidentbrief-production
+      cancel-in-progress: false
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+      APP_URL: ${{ vars.APP_URL }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - name: Skip superseded sources
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
+          if [ "$current" = "$SOURCE_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy and verify health, HTTPS and version
+        if: steps.source.outputs.current == 'true'
+        run: node scripts/deploy.ts

@@ -18,7 +18,7 @@ describe('service boundaries', () => {
   it('releases reservations after preparation errors and interrupted generation', async () => {
     const item = await f.incidentService.create(f.owner.id, input);
     const failure = vi
-      .spyOn(f.repository, 'summaryNotes')
+      .spyOn(f.noteStore, 'latest')
       .mockRejectedValueOnce(new Error('storage unavailable'));
     await expect(f.summaryService.prepare(f.owner.id, item.id)).rejects.toThrow(
       'storage unavailable',
@@ -49,7 +49,7 @@ describe('service boundaries', () => {
         yield 'unreachable';
       },
     };
-    const service = new SummaryService(f.repository, provider, 10);
+    const service = new SummaryService(f.repository, f.noteStore, provider, 10);
     const prepared = await service.prepare(f.owner.id, item.id);
     const events = [];
     for await (const event of prepared.events(new AbortController().signal)) events.push(event);
@@ -66,7 +66,7 @@ describe('service boundaries', () => {
     const gate = new Promise<void>((resolve) => {
       unlock = resolve;
     });
-    vi.spyOn(f.repository, 'summaryNotes').mockImplementation(async () => {
+    vi.spyOn(f.noteStore, 'latest').mockImplementation(async () => {
       await gate;
       return [];
     });

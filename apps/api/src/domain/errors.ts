@@ -14,3 +14,10 @@ export const notFound = () => new AppError('not_found', 'The requested record wa
 export const invalid = (message = 'The request is invalid.') =>
   new AppError('invalid_request', message, 400);
 export const unauthenticated = () => new AppError('unauthenticated', 'Please sign in.', 401);
+
+export class StorageIntegrityError extends Error {
+  constructor() {
+    super('Encrypted data could not be read.');
+    this.name = 'StorageIntegrityError';
+  }
+}
