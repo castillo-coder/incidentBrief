@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, desc, lt, or } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import type { IncidentRepository } from '../domain/ports.js';
 import type { Database } from '../db/client.js';
 import { incidents } from '../db/schema.js';
-import { decodeCursor } from './cursor.js';
+import { decodeCursor, beforeCursor } from './cursor.js';
 import { page } from './page.js';
 import type { StorageMapper } from './storage-mapper.js';
 
@@ -16,13 +16,8 @@ export function incidentRepository(db: Database, mapper: StorageMapper): Inciden
       const limit = query.limit ?? 20;
       const conditions = [eq(incidents.ownerId, ownerId)];
       if (query.status) conditions.push(eq(incidents.status, query.status));
-      if (cursor)
-        conditions.push(
-          or(
-            lt(incidents.createdAt, new Date(cursor.created_at)),
-            and(eq(incidents.createdAt, new Date(cursor.created_at)), lt(incidents.id, cursor.id)),
-          )!,
-        );
+      const boundary = beforeCursor(incidents.createdAt, incidents.id, cursor);
+      if (boundary) conditions.push(boundary);
       const rows = await db
         .select()
         .from(incidents)

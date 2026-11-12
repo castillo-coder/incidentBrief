@@ -3,7 +3,7 @@ import { Writable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { Incident, Note, Page, Auth, ApiError } from '@incidentbrief/contracts';
-import { incidents, sessions } from '../apps/api/src/db/schema.js';
+import { incidents, notes, sessions } from '../apps/api/src/db/schema.js';
 import { fixture, FakeProvider, input, origin, password, type Fixture } from './helpers.js';
 
 let f: Fixture;
@@ -15,6 +15,20 @@ afterEach(async () => {
 });
 
 describe('authentication and CSRF', () => {
+  it('reports the deployed source version without exposing configuration', async () => {
+    vi.stubEnv('RENDER_GIT_COMMIT', 'a'.repeat(40));
+    vi.stubEnv('APP_COMMIT', 'b'.repeat(40));
+    try {
+      expect((await f.app.inject({ url: '/version' })).json()).toEqual({
+        version: 'a'.repeat(40),
+      });
+      expect((await f.app.inject({ url: '/healthz' })).json()).toEqual({
+        status: 'ok',
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
   it('sets production cookie/HSTS headers and omits sensitive data from logs and errors', async () => {
     await f.close();
     let logs = '';
@@ -176,6 +190,36 @@ describe('authentication and CSRF', () => {
 });
 
 describe('incidents and notes', () => {
+  it('enforces note ownership inside repository reads and deletes', async () => {
+    const item = await f.incidentService.create(f.other.id, input);
+    const note = await f.noteService.add(f.other.id, item.id, 'Another owner’s private note.');
+    expect((await f.noteStore.list(f.owner.id, item.id, {})).data).toEqual([]);
+    expect(await f.noteStore.latest(f.owner.id, item.id)).toEqual([]);
+    expect(await f.noteStore.delete(f.owner.id, item.id, note.id)).toBe(false);
+    expect((await f.noteStore.list(f.other.id, item.id, {})).data[0]!.id).toBe(note.id);
+  });
+  it('traverses tied note timestamps without gaps or duplicates', async () => {
+    const item = await f.incidentService.create(f.owner.id, input);
+    const expected = [];
+    for (let index = 0; index < 5; index++)
+      expected.push((await f.noteService.add(f.owner.id, item.id, `Finding ${index}`)).id);
+    await f.db.update(notes).set({ createdAt: new Date('2026-01-01T00:00:00.000Z') });
+    const headers = await f.login();
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const response = await f.app.inject({
+        url: `/api/incidents/${item.id}/notes?limit=2${cursor ? `&cursor=${cursor}` : ''}`,
+        headers,
+      });
+      expect(response.statusCode).toBe(200);
+      const page: Page<Note> = response.json<Page<Note>>();
+      seen.push(...page.data.map((note) => note.id));
+      cursor = page.next_cursor;
+    } while (cursor);
+    expect(seen).toHaveLength(5);
+    expect(new Set(seen)).toEqual(new Set(expected));
+  });
   it('creates, edits, filters and deletes an incident', async () => {
     const headers = await f.login();
     const created = await f.app.inject({
