@@ -15,6 +15,20 @@ afterEach(async () => {
 });
 
 describe('authentication and CSRF', () => {
+  it('reports the deployed source version without exposing configuration', async () => {
+    vi.stubEnv('RENDER_GIT_COMMIT', 'a'.repeat(40));
+    vi.stubEnv('APP_COMMIT', 'b'.repeat(40));
+    try {
+      expect((await f.app.inject({ url: '/version' })).json()).toEqual({
+        version: 'a'.repeat(40),
+      });
+      expect((await f.app.inject({ url: '/healthz' })).json()).toEqual({
+        status: 'ok',
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
   it('sets production cookie/HSTS headers and omits sensitive data from logs and errors', async () => {
     await f.close();
     let logs = '';

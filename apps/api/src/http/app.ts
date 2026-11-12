@@ -151,7 +151,7 @@ export async function createApp(options: AppOptions) {
 
   app.get('/healthz', async () => ({ status: 'ok' }));
   app.get('/version', async () => ({
-    version: process.env.APP_COMMIT ?? 'development',
+    version: process.env.RENDER_GIT_COMMIT ?? process.env.APP_COMMIT ?? 'development',
   }));
 
   app.post<{ Body: Login }>(
