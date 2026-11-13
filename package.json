@@ -21,8 +21,10 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:container": "node scripts/container-smoke.ts",
     "db:migrate": "npm run db:migrate -w @incidentbrief/api",
     "user:create": "npm run user:create -w @incidentbrief/api",
+    "db:profile": "npm run build -w @incidentbrief/contracts && npm run db:profile -w @incidentbrief/api --",
     "start": "npm run start -w @incidentbrief/api"
   },
   "devDependencies": {

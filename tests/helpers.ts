@@ -7,13 +7,17 @@ import { migrate } from '../apps/api/src/db/migrate.js';
 import { users } from '../apps/api/src/db/schema.js';
 import { authRepository } from '../apps/api/src/repositories/auth-repository.js';
 import { incidentRepository } from '../apps/api/src/repositories/incident-repository.js';
+import { noteRepository } from '../apps/api/src/repositories/note-repository.js';
+import { StorageMapper } from '../apps/api/src/repositories/storage-mapper.js';
+import { AesGcmCipher } from '../apps/api/src/security/aes-gcm-cipher.js';
+import { NoteService } from '../apps/api/src/services/note-service.js';
 import { AuthService, hashPassword } from '../apps/api/src/services/auth-service.js';
 import { IncidentService } from '../apps/api/src/services/incident-service.js';
 import { SummaryService } from '../apps/api/src/services/summary-service.js';
 import type { SummaryProvider } from '../apps/api/src/domain/ports.js';
 import { createApp } from '../apps/api/src/http/app.js';
 
-export const password = randomBytes(20).toString('hex');
+export const password = process.env.E2E_PASSWORD ?? randomBytes(20).toString('hex');
 const passwordHash = hashPassword(password);
 export const origin = 'http://localhost:5173';
 export const input = {
@@ -28,7 +32,7 @@ export class FakeProvider implements SummaryProvider {
   available() {
     return this.mode !== 'unavailable';
   }
-  async *stream(context: string, signal: AbortSignal) {
+  async *stream(context: string, signal: AbortSignal): AsyncGenerator<string> {
     this.contexts.push(context);
     if (signal.aborted) throw signal.reason;
     yield 'Known facts\n';
@@ -37,13 +41,7 @@ export class FakeProvider implements SummaryProvider {
   }
 }
 
-export async function fixture(
-  options: {
-    provider?: SummaryProvider;
-    production?: boolean;
-    logger?: FastifyServerOptions['logger'];
-  } = {},
-) {
+export function testDatabaseUrl() {
   const base = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!base)
     throw new Error('Set TEST_DATABASE_URL to an isolated PostgreSQL database ending in _test.');
@@ -51,13 +49,27 @@ export async function fixture(
   if (!process.env.TEST_DATABASE_URL) url.pathname = '/incidentbrief_test';
   if (!url.pathname.endsWith('_test'))
     throw new Error('Refusing to reset a database not ending in _test.');
+  return url.toString();
+}
+
+export async function fixture(
+  options: {
+    provider?: SummaryProvider;
+    production?: boolean;
+    logger?: FastifyServerOptions['logger'];
+    origin?: string;
+    staticRoot?: string;
+  } = {},
+) {
   const config = loadConfig({
     ...process.env,
-    DATABASE_URL: url.toString(),
+    DATABASE_URL: testDatabaseUrl(),
     ENCRYPTION_KEY: randomBytes(32).toString('base64'),
   });
   const { db, pool } = createDatabase(config.databaseUrl);
-  await migrate(pool);
+  const cipher = new AesGcmCipher(config.encryptionKey);
+  const mapper = new StorageMapper(cipher);
+  await migrate(pool, cipher);
   await pool.query('TRUNCATE users CASCADE');
   const owner = {
     id: randomUUID(),
@@ -70,24 +82,28 @@ export async function fixture(
     passwordHash: await passwordHash,
   };
   await db.insert(users).values([owner, other]);
-  const repository = incidentRepository(db);
+  const repository = incidentRepository(db, mapper);
+  const noteStore = noteRepository(db, mapper);
   const auth = new AuthService(authRepository(db));
   const incidentService = new IncidentService(repository);
+  const noteService = new NoteService(repository, noteStore);
   const provider = options.provider ?? new FakeProvider();
-  const summaryService = new SummaryService(repository, provider);
+  const summaryService = new SummaryService(repository, noteStore, provider);
   const app = await createApp({
     auth,
     incidents: incidentService,
+    notes: noteService,
     summaries: summaryService,
-    origin,
+    origin: options.origin ?? origin,
     production: options.production ?? false,
     logger: options.logger ?? false,
+    ...(options.staticRoot ? { staticRoot: options.staticRoot } : {}),
   });
   async function login(who = owner) {
     const response = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
-      headers: { origin },
+      headers: { origin: options.origin ?? origin },
       payload: { email: who.email, password },
     });
     if (response.statusCode !== 200) throw new Error('Test login failed.');
@@ -95,7 +111,7 @@ export async function fixture(
     if (!cookie) throw new Error('Session cookie missing.');
     return {
       cookie: `session=${cookie.value}`,
-      origin,
+      origin: options.origin ?? origin,
       'x-csrf-token': response.json<Auth>().csrf_token,
     };
   }
@@ -104,6 +120,10 @@ export async function fixture(
     db,
     pool,
     repository,
+    noteStore,
+    noteService,
+    cipher,
+    encryptionKey: config.encryptionKey,
     owner,
     other,
     auth,
