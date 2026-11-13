@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: incidentbrief
+    runtime: docker
+    branch: main
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    autoDeployTrigger: 'off'
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: APP_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: incidentbrief-db
+          property: connectionString
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+databases:
+  - name: incidentbrief-db
+    plan: basic-256mb
+    region: frankfurt
+    databaseName: incidentbrief
+    user: incidentbrief
+    postgresMajorVersion: '18'
+    ipAllowList: []

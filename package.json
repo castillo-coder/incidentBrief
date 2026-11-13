@@ -11,17 +11,20 @@
     "node": ">=24 <27"
   },
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "dev": "npm run build -w @incidentbrief/contracts && concurrently -k 'npm run dev -w @incidentbrief/api' 'npm run dev -w @incidentbrief/web'",
     "build": "npm run build -w @incidentbrief/contracts && npm run build -w @incidentbrief/web && npm run build -w @incidentbrief/api",
-    "typecheck": "npm run build -w @incidentbrief/contracts && npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run build -w @incidentbrief/contracts && npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.tests.json",
     "lint": "eslint . && node scripts/check-boundaries.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:container": "node scripts/container-smoke.ts",
     "db:migrate": "npm run db:migrate -w @incidentbrief/api",
     "user:create": "npm run user:create -w @incidentbrief/api",
+    "db:profile": "npm run build -w @incidentbrief/contracts && npm run db:profile -w @incidentbrief/api --",
     "start": "npm run start -w @incidentbrief/api"
   },
   "devDependencies": {

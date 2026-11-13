@@ -28,10 +28,12 @@ export interface IncidentRepository {
   create(ownerId: string, input: IncidentInput): Promise<Incident>;
   update(ownerId: string, id: string, input: IncidentPatch): Promise<Incident | undefined>;
   delete(ownerId: string, id: string): Promise<boolean>;
-  listNotes(ownerId: string, incidentId: string, query: PageQuery): Promise<Page<Note>>;
-  addNote(ownerId: string, incidentId: string, body: string): Promise<Note | undefined>;
-  deleteNote(ownerId: string, incidentId: string, noteId: string): Promise<boolean>;
-  summaryNotes(ownerId: string, incidentId: string): Promise<Note[]>;
+}
+export interface NoteRepository {
+  list(ownerId: string, incidentId: string, query: PageQuery): Promise<Page<Note>>;
+  add(ownerId: string, incidentId: string, body: string): Promise<Note | undefined>;
+  delete(ownerId: string, incidentId: string, noteId: string): Promise<boolean>;
+  latest(ownerId: string, incidentId: string): Promise<Note[]>;
 }
 export interface SummaryProvider {
   available(): boolean;
